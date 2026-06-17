@@ -68,7 +68,7 @@ describe('route', () => {
     expect(cr.calls[0].url).not.toContain('?identifier=');
   });
 
-  test('clinical -> SHR as one transaction bundle (patient included as ref target)', async () => {
+  test('clinical -> SHR bundle contains ONLY clinical (no Patient/demographics)', async () => {
     const cr = fakeClient();
     const shr = fakeClient();
     await route(bundle(pat('pA'), obs('o1', 'pA'), enc('e1', 'pA')), {
@@ -77,7 +77,9 @@ describe('route', () => {
     expect(shr.calls).toHaveLength(1);
     expect(shr.calls[0].url).toBe('http://openhim/SHR/fhir');
     const ids = shr.calls[0].body.entry.map((e) => e.request.url);
-    expect(ids).toEqual(['Patient/pA', 'Observation/o1', 'Encounter/e1']);
+    expect(ids).toEqual(['Observation/o1', 'Encounter/e1']); // no Patient — demographics stay in CR
+    // the Patient still went to CR (just not to the SHR)
+    expect(cr.calls.map((c) => c.url)).toEqual(['http://openhim/CR/fhir/Patient/pA']);
   });
 
   test('duplicate clinical entries are deduped before the SHR bundle (no HAPI-0535)', async () => {
@@ -87,7 +89,7 @@ describe('route', () => {
       config, crClient: cr, shrClient: shr,
     });
     const urls = shr.calls[0].body.entry.map((e) => e.request.url);
-    expect(urls).toEqual(['Patient/pA', 'Observation/o1']); // o1 appears once
+    expect(urls).toEqual(['Observation/o1']); // o1 appears once; no Patient in the SHR bundle
   });
 
   test('patient-only bundle -> CR only, no SHR call', async () => {

@@ -5,8 +5,9 @@
 //                on the in-resource identifiers (source key, fingerprint), so a stable uuid PUT is
 //                idempotent and converges with the parallel real-time feed. (OpenCR does NOT
 //                support FHIR conditional-update, so we PUT by id, not by ?identifier=.)
-//   clinical  -> SHR: one transaction Bundle (patient included as the reference target), so the
-//                SHR's golden-record normalization can re-point clinical references.
+//   clinical  -> SHR: one transaction Bundle of ONLY clinical resources (no demographics in the
+//                SHR, per the CHARESS spec). They keep their subject reference to Patient/{id};
+//                the SHR's golden-record normalization resolves it against the CR.
 // All bundle entries are de-duplicated by resourceType/id first, so a stray duplicate can never
 // poison a whole transaction (HAPI-0535).
 
@@ -108,10 +109,12 @@ async function route(bundle, deps) {
     responseEntries.push({ response: { status: String(res.status || 0), location: `Patient/${p.id}` } });
   }
 
-  // clinical -> SHR (single transaction bundle; include patients as reference targets)
+  // clinical -> SHR (single transaction bundle). Demographics do NOT go to the SHR (per the
+  // CHARESS spec) — only clinical resources. They keep their subject reference to Patient/{id};
+  // the SHR's golden-record normalization resolves that against the CR, where identity lives.
   let shrStatus = null;
   if (clinical.length) {
-    const shrBundle = buildTransactionBundle([...patients, ...clinical]);
+    const shrBundle = buildTransactionBundle(clinical);
     const t = Date.now();
     const res = await shrClient.post(shrBase, shrBundle);
     shrMs = Date.now() - t;

@@ -30,8 +30,9 @@ POSTs bundles to a single endpoint.
    - **`Patient` → `PUT {CR_URL}/Patient/{id}`.** OpenCR doesn't support FHIR conditional-update,
      so we PUT by the stable uuid; OpenCR still matches/dedupes via `decisionRules.json` on the
      in-resource identifiers (source key, fingerprint). Idempotent, converges with the real-time feed.
-   - **clinical → `POST {SHR_URL}`** as one transaction Bundle (the patient is included as the
-     reference target so the SHR's golden-record normalization can re-point clinical references).
+   - **clinical → `POST {SHR_URL}`** as one transaction Bundle of **only clinical resources** — no
+     demographics in the SHR (per the CHARESS spec). They keep their `subject` reference to
+     `Patient/{id}`; the SHR's golden-record normalization resolves it against the CR.
 3. Returns a `transaction-response` Bundle. If any downstream call fails it responds **502**, so
    OpenHIM marks the transaction failed and the pipeline retries the (idempotent) bundle.
 
