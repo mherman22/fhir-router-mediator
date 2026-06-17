@@ -104,6 +104,9 @@ describe('route', () => {
     const r = await route(bundle(pat('pA'), obs('o1', 'pA')), { config, crClient: cr, shrClient: shr });
     expect(r.httpStatus).toBe(502);
     expect(r.summary.failures).toBe(1);
+    // failure is captured in the summary (for the warn log), with destination + status
+    expect(r.summary.errors[0]).toMatchObject({ dest: 'cr', id: 'pA', status: 500 });
+    expect(typeof r.summary.crMs).toBe('number');
   });
 
   test('non-bundle body -> 400', async () => {

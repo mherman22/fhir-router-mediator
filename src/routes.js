@@ -13,12 +13,18 @@ function createRouter(deps) {
 
   // Main entry: the pipeline POSTs a FHIR transaction Bundle here (OpenHIM channel /consolidated/fhir).
   router.post('/fhir', async (req, res) => {
+    const started = Date.now();
+    const entryCount = Array.isArray(req.body && req.body.entry) ? req.body.entry.length : 0;
+    logger.info({ entries: entryCount }, 'bundle received');
     try {
       const result = await route(req.body, { ...deps, logger });
       metrics &&
         metrics.bundles.inc({ outcome: result.httpStatus === 200 ? 'ok' : 'fail' });
       if (result.summary) {
-        logger.info(result.summary, 'bundle routed');
+        const line = { ...result.summary, httpStatus: result.httpStatus, totalMs: Date.now() - started };
+        // success at info, any downstream failure at warn so it stands out in the logs
+        if (result.httpStatus === 200) logger.info(line, 'bundle routed');
+        else logger.warn(line, 'bundle routed with failures');
       }
       res
         .status(result.httpStatus)

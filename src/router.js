@@ -14,6 +14,22 @@ function operationOutcome(severity, code, diagnostics) {
   return { resourceType: 'OperationOutcome', issue: [{ severity, code, diagnostics }] };
 }
 
+// short human string from a downstream response, for logs (FHIR OperationOutcome text or raw)
+function snippet(res) {
+  if (!res) return '';
+  if (res.error) return String(res.error).slice(0, 200);
+  const b = res.body;
+  if (b == null) return '';
+  if (typeof b === 'string') return b.slice(0, 200);
+  const issue = b.issue && b.issue[0];
+  if (issue) return `${issue.code || ''}: ${issue.diagnostics || issue.details?.text || ''}`.slice(0, 200);
+  try {
+    return JSON.stringify(b).slice(0, 200);
+  } catch {
+    return '';
+  }
+}
+
 // resources from a Bundle's entries, de-duplicated by resourceType/id (first wins, order kept)
 function dedupeResources(entries) {
   const seen = new Set();
@@ -64,36 +80,53 @@ async function route(bundle, deps) {
   }
 
   const resources = dedupeResources(bundle.entry);
+  const deduped = bundle.entry.length - resources.length;
   const { patients, clinical } = split(resources, config.routing.identityResourceTypes);
   const crBase = config.destinations.clientRegistry.baseUrl.replace(/\/$/, '');
   const shrBase = config.destinations.sharedHealthRecord.baseUrl.replace(/\/$/, '');
 
   const responseEntries = [];
+  const errors = []; // sample of downstream failures, for the summary log
   let failures = 0;
+  let crOk = 0;
+  let crMs = 0;
+  let shrMs = 0;
 
-  // identity -> OpenCR (one PUT per patient)
+  // identity -> OpenCR (one PUT per patient). OpenCR has no conditional-update, so PUT by id.
   for (const p of patients) {
+    const t = Date.now();
     const res = await crClient.put(`${crBase}/Patient/${p.id}`, p);
+    crMs += Date.now() - t;
     const ok = isOk(res.status);
-    if (!ok) failures += 1;
+    crOk += ok ? 1 : 0;
+    if (!ok) {
+      failures += 1;
+      if (errors.length < 5) errors.push({ dest: 'cr', id: p.id, status: res.status, detail: snippet(res) });
+      logger && logger.warn({ patient: p.id, status: res.status, detail: snippet(res) }, 'CR PUT failed');
+    }
     metrics && metrics.routed.inc({ destination: 'cr', outcome: ok ? 'ok' : 'fail' });
     responseEntries.push({ response: { status: String(res.status || 0), location: `Patient/${p.id}` } });
-    logger && logger.debug({ patient: p.id, status: res.status }, 'routed Patient -> CR');
   }
 
   // clinical -> SHR (single transaction bundle; include patients as reference targets)
+  let shrStatus = null;
   if (clinical.length) {
     const shrBundle = buildTransactionBundle([...patients, ...clinical]);
+    const t = Date.now();
     const res = await shrClient.post(shrBase, shrBundle);
+    shrMs = Date.now() - t;
+    shrStatus = res.status;
     const ok = isOk(res.status);
-    if (!ok) failures += 1;
+    if (!ok) {
+      failures += 1;
+      errors.push({ dest: 'shr', count: clinical.length, status: res.status, detail: snippet(res) });
+      logger && logger.warn({ clinical: clinical.length, status: res.status, detail: snippet(res) }, 'SHR POST failed');
+    }
     metrics &&
       metrics.routed.inc({ destination: 'shr', outcome: ok ? 'ok' : 'fail' }, clinical.length);
     responseEntries.push({
       response: { status: String(res.status || 0), outcome: res.body || res.error },
     });
-    logger &&
-      logger.debug({ clinical: clinical.length, status: res.status }, 'routed clinical -> SHR');
   }
 
   return {
@@ -101,7 +134,17 @@ async function route(bundle, deps) {
     // transaction failed and the pipeline retries the (idempotent) bundle next cycle.
     httpStatus: failures === 0 ? 200 : 502,
     body: { resourceType: 'Bundle', type: 'transaction-response', entry: responseEntries },
-    summary: { patients: patients.length, clinical: clinical.length, failures },
+    summary: {
+      patients: patients.length,
+      patientsOk: crOk,
+      clinical: clinical.length,
+      shrStatus,
+      deduped,
+      failures,
+      crMs,
+      shrMs,
+      errors,
+    },
   };
 }
 
