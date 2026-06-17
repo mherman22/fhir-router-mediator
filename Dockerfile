@@ -2,9 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# install production deps only
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev --no-audit --no-fund
+# install production deps only — npm ci for a reproducible, lockfile-pinned build
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY src ./src
 COPY config ./config

@@ -78,3 +78,18 @@ curl -sX POST http://localhost:3000/fhir \
 - `GET /fhir/metadata` — minimal CapabilityStatement
 - `GET /health` — liveness + configured destinations
 - `GET /metrics` — Prometheus metrics
+
+## Operational notes
+
+- **Channel registration.** In the SEDISH stack the `/consolidated/fhir` channel is created by the
+  OpenHIM **config importer**, not by this mediator — that OpenHIM uses Keycloak, so basic-auth
+  mediator self-registration is skipped (registration only runs if `OPENHIM_API_PASSWORD` is set
+  *and* your OpenHIM accepts it). The `config/mediator.json` here is the self-register definition
+  for OpenHIM deployments that do support it.
+- **Bundle size vs. timeout.** The mediator PUTs each `Patient` to OpenCR **sequentially**, so a
+  very large bundle can take longer than OpenHIM's request timeout — OpenHIM then returns `500` to
+  the caller even though the writes land, and the caller never sees success. Keep upstream bundles
+  modest (the pipeline pages identities at `BATCH_SIZE=100`). If you need bigger bundles, raise the
+  channel timeout or parallelize the CR PUTs (kept sequential here to avoid OpenCR matching races).
+- **Failure semantics.** Any downstream non-2xx makes the whole bundle return `502` (logged at
+  `warn` with status + detail); the upstream is expected to retry the idempotent bundle.
