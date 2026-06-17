@@ -1,0 +1,36 @@
+{
+  "app": {
+    "port": 3000
+  },
+  "mediator": {
+    "api": {
+      "username": "root@openhim.org",
+      "password": "",
+      "apiURL": "https://openhim-core:8080",
+      "trustSelfSigned": true,
+      "urn": "urn:mediator:fhir-router"
+    }
+  },
+  "destinations": {
+    "clientRegistry": {
+      "name": "OpenCR (Client Registry)",
+      "baseUrl": "http://openhim-core:5001/CR/fhir"
+    },
+    "sharedHealthRecord": {
+      "name": "SHR (Shared Health Record)",
+      "baseUrl": "http://openhim-core:5001/SHR/fhir"
+    }
+  },
+  "upstreamAuth": {
+    "username": "consolidated",
+    "password": "consolidated"
+  },
+  "routing": {
+    "identityResourceTypes": ["Patient"]
+  },
+  "performance": {
+    "timeoutMs": 120000,
+    "retries": 3,
+    "rejectUnauthorized": false
+  }
+}

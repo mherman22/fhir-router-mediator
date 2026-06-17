@@ -1,0 +1,43 @@
+{
+  "urn": "urn:mediator:fhir-router",
+  "version": "1.0.0",
+  "name": "FHIR Router",
+  "description": "Routes a FHIR transaction Bundle by resource type: Patient -> OpenCR (identity), clinical -> SHR",
+  "defaultChannelConfig": [
+    {
+      "methods": ["POST"],
+      "type": "http",
+      "authType": "private",
+      "status": "enabled",
+      "name": "FHIR Router",
+      "urlPattern": "^/consolidated/fhir.*$",
+      "routes": [
+        {
+          "type": "http",
+          "status": "enabled",
+          "forwardAuthHeader": false,
+          "name": "FHIR Router Route",
+          "secured": false,
+          "host": "fhir-router",
+          "port": 3000,
+          "path": "/fhir",
+          "primary": true
+        }
+      ],
+      "allow": ["emr"],
+      "priority": 1
+    }
+  ],
+  "endpoints": [
+    {
+      "name": "FHIR Router Endpoint",
+      "host": "fhir-router",
+      "path": "/fhir",
+      "port": 3000,
+      "primary": true,
+      "forwardAuthHeader": false,
+      "status": "enabled",
+      "type": "http"
+    }
+  ]
+}

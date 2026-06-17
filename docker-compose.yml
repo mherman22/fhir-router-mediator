@@ -1,0 +1,21 @@
+version: "3.8"
+
+# Standalone run. In the SEDISH stack the mediator is deployed as an Instant package
+# on the `openhim` overlay network (see the package README).
+services:
+  fhir-router:
+    build: .
+    image: fhir-router-mediator:local
+    environment:
+      PORT: "3000"
+      # OpenHIM mediator registration (optional — omit to skip registration)
+      OPENHIM_API_URL: ${OPENHIM_API_URL:-https://openhim-core:8080}
+      OPENHIM_API_USERNAME: ${OPENHIM_API_USERNAME:-root@openhim.org}
+      OPENHIM_API_PASSWORD: ${OPENHIM_API_PASSWORD:-}
+      # downstream channels (through OpenHIM) + the single client used for both
+      CR_URL: ${CR_URL:-http://openhim-core:5001/CR/fhir}
+      SHR_URL: ${SHR_URL:-http://openhim-core:5001/SHR/fhir}
+      UPSTREAM_USERNAME: ${UPSTREAM_USERNAME:-consolidated}
+      UPSTREAM_PASSWORD: ${UPSTREAM_PASSWORD:-consolidated}
+    ports:
+      - "3000:3000"
