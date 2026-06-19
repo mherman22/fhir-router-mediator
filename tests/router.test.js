@@ -68,7 +68,7 @@ describe('route', () => {
     expect(cr.calls[0].url).not.toContain('?identifier=');
   });
 
-  test('clinical -> SHR bundle contains ONLY clinical (no Patient/demographics)', async () => {
+  test('SHR bundle includes the patient(s) + clinical (mediator stubs/strips the Patient)', async () => {
     const cr = fakeClient();
     const shr = fakeClient();
     await route(bundle(pat('pA'), obs('o1', 'pA'), enc('e1', 'pA')), {
@@ -77,8 +77,9 @@ describe('route', () => {
     expect(shr.calls).toHaveLength(1);
     expect(shr.calls[0].url).toBe('http://openhim/SHR/fhir');
     const ids = shr.calls[0].body.entry.map((e) => e.request.url);
-    expect(ids).toEqual(['Observation/o1', 'Encounter/e1']); // no Patient — demographics stay in CR
-    // the Patient still went to CR (just not to the SHR)
+    // patient forwarded to the SHR too — the SHR mediator decides what to keep (link-only stub)
+    expect(ids).toEqual(['Patient/pA', 'Observation/o1', 'Encounter/e1']);
+    // and the Patient still went to CR
     expect(cr.calls.map((c) => c.url)).toEqual(['http://openhim/CR/fhir/Patient/pA']);
   });
 
@@ -89,15 +90,15 @@ describe('route', () => {
       config, crClient: cr, shrClient: shr,
     });
     const urls = shr.calls[0].body.entry.map((e) => e.request.url);
-    expect(urls).toEqual(['Observation/o1']); // o1 appears once; no Patient in the SHR bundle
+    expect(urls).toEqual(['Patient/pA', 'Observation/o1']); // deduped; patient + the single obs
   });
 
-  test('patient-only bundle -> CR only, no SHR call', async () => {
+  test('patient-only (identity) bundle -> CR only, no SHR stub', async () => {
     const cr = fakeClient();
     const shr = fakeClient();
     await route(bundle(pat('pA')), { config, crClient: cr, shrClient: shr });
     expect(cr.calls).toHaveLength(1);
-    expect(shr.calls).toHaveLength(0);
+    expect(shr.calls).toHaveLength(0); // no clinical -> nothing sent to the SHR
   });
 
   test('downstream failure -> 502 (so OpenHIM marks it failed and the pipeline retries)', async () => {

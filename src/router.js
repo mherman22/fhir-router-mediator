@@ -1,13 +1,16 @@
 'use strict';
 
-// The routing core. Given a FHIR transaction Bundle, route by resource type:
+// The routing core. Given a FHIR transaction Bundle, route by resource type — this is a thin
+// router: it forwards resources to the right destination and does NOT decide what each store keeps
+// (that policy lives in the destinations, e.g. the SHR mediator).
 //   Patient   -> OpenCR (identity): PUT /Patient/{id}. OpenCR matches/dedupes via decisionRules
 //                on the in-resource identifiers (source key, fingerprint), so a stable uuid PUT is
 //                idempotent and converges with the parallel real-time feed. (OpenCR does NOT
 //                support FHIR conditional-update, so we PUT by id, not by ?identifier=.)
-//   clinical  -> SHR: one transaction Bundle of ONLY clinical resources (no demographics in the
-//                SHR, per the CHARESS spec). They keep their subject reference to Patient/{id};
-//                the SHR's golden-record normalization resolves it against the CR.
+//   -> SHR (when the bundle has clinical): one transaction Bundle of the patient(s) + clinical.
+//                The SHR mediator owns SHR content — in SEDISH it stores each Patient as a
+//                demographics-stripped stub with the golden-record link and keeps clinical on the
+//                site-specific Patient id. A patient-only (identity) bundle is not sent to the SHR.
 // All bundle entries are de-duplicated by resourceType/id first, so a stray duplicate can never
 // poison a whole transaction (HAPI-0535).
 
@@ -109,12 +112,15 @@ async function route(bundle, deps) {
     responseEntries.push({ response: { status: String(res.status || 0), location: `Patient/${p.id}` } });
   }
 
-  // clinical -> SHR (single transaction bundle). Demographics do NOT go to the SHR (per the
-  // CHARESS spec) — only clinical resources. They keep their subject reference to Patient/{id};
-  // the SHR's golden-record normalization resolves that against the CR, where identity lives.
+  // -> SHR (single transaction bundle), only when there's clinical to store. The router does NOT
+  // decide SHR content: it forwards the patient(s) alongside the clinical and lets the SHR mediator
+  // own the policy — in SEDISH (mpiLinkOnly) it stores each Patient as a demographics-stripped stub
+  // carrying the golden-record link, and keeps clinical on the site-specific Patient id. A
+  // patient-only (identity) bundle goes to OpenCR only — no empty SHR stubs.
   let shrStatus = null;
-  if (clinical.length) {
-    const shrBundle = buildTransactionBundle(clinical);
+  const shrResources = clinical.length ? resources : [];
+  if (shrResources.length) {
+    const shrBundle = buildTransactionBundle(shrResources);
     const t = Date.now();
     const res = await shrClient.post(shrBase, shrBundle);
     shrMs = Date.now() - t;
@@ -122,11 +128,11 @@ async function route(bundle, deps) {
     const ok = isOk(res.status);
     if (!ok) {
       failures += 1;
-      errors.push({ dest: 'shr', count: clinical.length, status: res.status, detail: snippet(res) });
-      logger && logger.warn({ clinical: clinical.length, status: res.status, detail: snippet(res) }, 'SHR POST failed');
+      errors.push({ dest: 'shr', count: shrResources.length, status: res.status, detail: snippet(res) });
+      logger && logger.warn({ shr: shrResources.length, status: res.status, detail: snippet(res) }, 'SHR POST failed');
     }
     metrics &&
-      metrics.routed.inc({ destination: 'shr', outcome: ok ? 'ok' : 'fail' }, clinical.length);
+      metrics.routed.inc({ destination: 'shr', outcome: ok ? 'ok' : 'fail' }, shrResources.length);
     responseEntries.push({
       response: { status: String(res.status || 0), outcome: res.body || res.error },
     });
