@@ -1,7 +1,8 @@
 # FHIR Router Mediator
 
-[![CI](https://github.com/mherman22/fhir-router-mediator/actions/workflows/ci.yml/badge.svg)](https://github.com/mherman22/fhir-router-mediator/actions/workflows/ci.yml)
-[![Publish image](https://github.com/mherman22/fhir-router-mediator/actions/workflows/publish.yml/badge.svg)](https://github.com/mherman22/fhir-router-mediator/actions/workflows/publish.yml)
+[![CI](https://github.com/DIGI-UW/fhir-router-mediator/actions/workflows/ci.yml/badge.svg)](https://github.com/DIGI-UW/fhir-router-mediator/actions/workflows/ci.yml)
+
+[![Publish image](https://github.com/DIGI-UW/fhir-router-mediator/actions/workflows/publish.yml/badge.svg)](https://github.com/DIGI-UW/fhir-router-mediator/actions/workflows/publish.yml)
 
 An [OpenHIM](https://openhim.org/) mediator that takes a FHIR R4 **transaction Bundle** and
 routes it by resource type to the SEDISH infrastructure:
