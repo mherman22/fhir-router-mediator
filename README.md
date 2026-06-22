@@ -10,10 +10,8 @@ routes it by resource type to the SEDISH infrastructure:
 - **`Patient` → OpenCR** (the Client Registry / MPI) — identity
 - **clinical resources → SHR** (the Shared Health Record) — Encounters, Observations, Conditions, …
 
-It is the write-side counterpart to [`fhir-aggregator-mediator`](https://github.com/mherman22/fhir-aggregator-mediator)
-(which is read-side: it *aggregates* many FHIR servers into one). This one *splits* one stream out
-to the right destinations, so the data pipeline doesn't need to know the CR/SHR topology — it just
-POSTs bundles to a single endpoint.
+It splits one incoming stream out to the right destinations, so the data pipeline doesn't need to
+know the CR/SHR topology — it just POSTs bundles to a single endpoint.
 
 ## How it works
 
