@@ -61,6 +61,19 @@ docker build -t fhir-router-mediator .
 docker run -p 3000:3000 -e UPSTREAM_PASSWORD=consolidated fhir-router-mediator
 ```
 
+### In SEDISH
+
+Deployed by the `fhir-router-mediator` instant package as the `fhir-router` service, pulling
+`ghcr.io/digi-uw/fhir-router-mediator:main`:
+
+```bash
+./build-image.sh
+./instant package init -n fhir-router-mediator --env-file .env
+```
+
+The `/consolidated/fhir` channel it serves is created by the interoperability-layer-openhim config
+importer (this OpenHIM uses Keycloak, so the mediator doesn't self-register — see Operational notes).
+
 ### Try it
 
 ```bash
